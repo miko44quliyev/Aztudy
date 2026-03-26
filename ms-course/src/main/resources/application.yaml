@@ -1,0 +1,27 @@
+spring:
+  cloud:
+    compatibility-verifier:
+      enabled: false
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+jwt:
+  secret: "w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV"
+server:
+  port: 8082
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+  server-url: http://localhost:8080

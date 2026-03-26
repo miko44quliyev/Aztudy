@@ -1,0 +1,18 @@
+# Java/Gradle/Maven
+**/build/
+**/target/
+**/.gradle/
+**/out/
+
+# IDE
+**/.idea/
+**/*.iml
+**/.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+**/application-dev.yml
+**/application-prod.yml (əgər içində parollar varsa)

@@ -1,0 +1,136 @@
+spring:
+  application:
+    name: aztudy-api-gateway
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.reactive.ReactiveUserDetailsServiceAutoConfiguration
+
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - "*"
+            allowed-methods:
+              - "*"
+            allowed-headers:
+              - "*"
+            allow-credentials: false
+
+      routes:
+
+        # --- Auth routes ---
+        - id: ms-auth-auth
+          uri: ${MS_AUTH_URL:http://ms-auth:8081}
+          predicates:
+            - Path=/api/auth/**
+
+        - id: ms-auth-users
+          uri: ${MS_AUTH_URL:http://ms-auth:8081}
+          predicates:
+            - Path=/api/users/**
+
+        # --- Course routes ---
+        - id: ms-course-courses
+          uri: ${MS_COURSE_URL:http://ms-course:8082}
+          predicates:
+            - Path=/api/courses/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        - id: ms-course-enrollments
+          uri: ${MS_COURSE_URL:http://ms-course:8082}
+          predicates:
+            - Path=/api/enrollments/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        # --- Content routes ---
+        - id: ms-content-contents
+          uri: ${MS_CONTENT_URL:http://ms-content:8083}
+          predicates:
+            - Path=/api/contents/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        # --- Assessment routes ---
+        - id: ms-assessment-assessments
+          uri: ${MS_ASSESSMENT_URL:http://ms-assessment:8084}
+          predicates:
+            - Path=/api/assessments/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        - id: ms-assignment-assignments
+          uri: ${MS_ASSIGNMENT_URL:http://ms-assignment:8085}
+          predicates:
+            - Path=/api/assignments/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        # --- Swagger docs routes (no JWT) ---
+        - id: ms-auth-docs
+          uri: ${MS_AUTH_URL:http://ms-auth:8081}
+          predicates:
+            - Path=/aggregate/ms-auth/v3/api-docs
+          filters:
+            - RewritePath=/aggregate/ms-auth/(?<segment>.*), /${segment}
+
+        - id: ms-course-docs
+          uri: ${MS_COURSE_URL:http://ms-course:8082}
+          predicates:
+            - Path=/aggregate/ms-course/v3/api-docs
+          filters:
+            - RewritePath=/aggregate/ms-course/(?<segment>.*), /${segment}
+
+        - id: ms-content-docs
+          uri: ${MS_CONTENT_URL:http://ms-content:8083}
+          predicates:
+            - Path=/aggregate/ms-content/v3/api-docs
+          filters:
+            - RewritePath=/aggregate/ms-content/(?<segment>.*), /${segment}
+
+        - id: ms-assessment-docs
+          uri: ${MS_ASSESSMENT_URL:http://ms-assessment:8084}
+          predicates:
+            - Path=/aggregate/ms-assessment/v3/api-docs
+          filters:
+            - RewritePath=/aggregate/ms-assessment/(?<segment>.*), /${segment}
+
+        - id: ms-assignment-docs
+          uri: ${MS_ASSIGNMENT_URL:http://ms-assignment:8085}
+          predicates:
+            - Path=/aggregate/ms-assignment/v3/api-docs
+          filters:
+            - RewritePath=/aggregate/ms-assignment/(?<segment>.*), /${segment}
+
+server:
+  port: 8080
+
+jwt:
+  secret: "w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV"
+  expiration: 86400000
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: ms-auth
+        url: /aggregate/ms-auth/v3/api-docs
+      - name: ms-course
+        url: /aggregate/ms-course/v3/api-docs
+      - name: ms-content
+        url: /aggregate/ms-content/v3/api-docs
+      - name: ms-assessment
+        url: /aggregate/ms-assessment/v3/api-docs
+      - name: ms-assignment
+        url: /aggregate/ms-assignment/v3/api-docs
+  api-docs:
+    enabled: true

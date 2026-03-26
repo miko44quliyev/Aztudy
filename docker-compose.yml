@@ -1,0 +1,212 @@
+services:
+
+  # ─────────────────────────────────────────
+  # INFRASTRUCTURE
+  # ─────────────────────────────────────────
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - aztudy-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U admin" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-admin123}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - aztudy-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aztudy-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # SERVICES
+  # ─────────────────────────────────────────
+
+  ms-auth:
+    build:
+      context: ./ms-auth
+      dockerfile: Dockerfile
+    container_name: ms-auth
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    environment:
+      DB_URL: ${MS_AUTH_DB_URL:-jdbc:postgresql://postgres:5432/authdb}
+      DB_USERNAME: ${POSTGRES_USER:-admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      JWT_SECRET: ${JWT_SECRET:-w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aztudy-network
+
+  ms-course:
+    build:
+      context: ./ms-course
+      dockerfile: Dockerfile
+    container_name: ms-course
+    restart: on-failure
+    ports:
+      - "8082:8082"
+    environment:
+      DB_URL: ${MS_COURSE_DB_URL:-jdbc:postgresql://postgres:5432/coursedb}
+      DB_USERNAME: ${POSTGRES_USER:-admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      MS_AUTH_URL: http://ms-auth:8081
+      JWT_SECRET: ${JWT_SECRET:-w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aztudy-network
+
+  ms-content:
+    build:
+      context: ./ms-content
+      dockerfile: Dockerfile
+    container_name: ms-content
+    restart: on-failure
+    ports:
+      - "8083:8083"
+    environment:
+      DB_URL: ${MS_CONTENT_DB_URL:-jdbc:postgresql://postgres:5432/contentdb}
+      DB_USERNAME: ${POSTGRES_USER:-admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      MINIO_URL: ${MINIO_URL:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-admin123}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-content}
+      JWT_SECRET: ${JWT_SECRET:-w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}
+      MS_COURSE_URL: http://ms-course:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - aztudy-network
+
+  ms-assessment:
+    build:
+      context: ./ms-assessment
+      dockerfile: Dockerfile
+    container_name: ms-assessment
+    restart: on-failure
+    ports:
+      - "8084:8084"
+    environment:
+      DB_URL: ${MS_ASSESSMENT_DB_URL:-jdbc:postgresql://postgres:5432/assessmentdb}
+      DB_USERNAME: ${POSTGRES_USER:-admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      JWT_SECRET: ${JWT_SECRET:-w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}
+      MS_COURSE_URL: http://ms-course:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aztudy-network
+
+  ms-assignment:
+    build:
+      context: ./ms-assignment
+      dockerfile: Dockerfile
+    container_name: ms-assignment
+    restart: on-failure
+    ports:
+      - "8085:8085"
+    environment:
+      DB_URL: ${MS_ASSIGNMENT_DB_URL:-jdbc:postgresql://postgres:5432/assignmentdb}
+      DB_USERNAME: ${POSTGRES_USER:-admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      MINIO_URL: ${MINIO_URL:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-admin123}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-assignment}
+      JWT_SECRET: ${JWT_SECRET:-w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}
+      MS_COURSE_URL: http://ms-course:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - aztudy-network
+
+  api-gateway:
+    build:
+      context: ./aztudy-api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    environment:
+      MS_AUTH_URL: ${MS_AUTH_URL:-http://ms-auth:8081}
+      MS_COURSE_URL: ${MS_COURSE_URL:-http://ms-course:8082}
+      MS_CONTENT_URL: ${MS_CONTENT_URL:-http://ms-content:8083}
+      MS_ASSESSMENT_URL: ${MS_ASSESSMENT_URL:-http://ms-assessment:8084}
+      MS_ASSIGNMENT_URL: ${MS_ASSIGNMENT_URL:-http://ms-assignment:8085}
+      JWT_SECRET: ${JWT_SECRET:-w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+    depends_on:
+      - ms-auth
+      - ms-course
+      - ms-content
+      - ms-assessment
+      - ms-assignment
+    networks:
+      - aztudy-network
+
+# ─────────────────────────────────────────
+# VOLUMES & NETWORKS
+# ─────────────────────────────────────────
+
+volumes:
+  postgres_data:
+  minio_data:
+  redis_data:
+
+networks:
+  aztudy-network:
+    driver: bridge
