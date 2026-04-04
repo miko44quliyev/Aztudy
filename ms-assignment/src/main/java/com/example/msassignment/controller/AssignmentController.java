@@ -1,16 +1,17 @@
 package com.example.msassignment.controller;
 
-import com.example.msassignment.dto.request.AssignmentGradeRequest;
-import com.example.msassignment.dto.request.AssignmentRequest;
-import com.example.msassignment.dto.request.AssignmentSubmissionRequest;
-import com.example.msassignment.dto.request.AssignmentUpdateRequest;
+import com.example.msassignment.dto.request.*;
 import com.example.msassignment.dto.response.AssignmentResponse;
 import com.example.msassignment.dto.response.AssignmentSubmissionResponse;
+import com.example.msassignment.exception.ResourceNotFoundException;
+import com.example.msassignment.exception.UnauthorizedException;
 import com.example.msassignment.security.CustomUserPrincipal;
 import com.example.msassignment.service.AssignmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.InputStream;
 import java.util.List;
 
 @RestController
@@ -33,7 +35,6 @@ public class AssignmentController {
     public ResponseEntity<AssignmentResponse> createAssignment(
             @Valid @RequestBody AssignmentRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📝 Creating assignment: {} by teacher: {}", request.getTitle(), teacher.id());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(assignmentService.createAssignment(request, teacher.id()));
     }
@@ -44,7 +45,6 @@ public class AssignmentController {
             @PathVariable Long assignmentId,
             @Valid @RequestBody AssignmentUpdateRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("✏️ Updating assignment: {} by teacher: {}", assignmentId, teacher.id());
         return ResponseEntity.ok(assignmentService.updateAssignment(assignmentId, request, teacher.id()));
     }
 
@@ -53,7 +53,6 @@ public class AssignmentController {
     public ResponseEntity<Void> deleteAssignment(
             @PathVariable Long assignmentId,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("🗑️ Deleting assignment: {} by teacher: {}", assignmentId, teacher.id());
         assignmentService.deleteAssignment(assignmentId, teacher.id());
         return ResponseEntity.noContent().build();
     }
@@ -61,23 +60,20 @@ public class AssignmentController {
     @GetMapping("/{assignmentId}")
     public ResponseEntity<AssignmentResponse> getAssignmentById(
             @PathVariable Long assignmentId) {
-        log.info("📖 Getting assignment: {}", assignmentId);
         return ResponseEntity.ok(assignmentService.getAssignmentById(assignmentId));
     }
 
     @GetMapping("/course/{courseId}")
     public ResponseEntity<List<AssignmentResponse>> getAssignmentsByCourse(
             @PathVariable Long courseId) {
-        log.info("📚 Getting assignments for course: {}", courseId);
         return ResponseEntity.ok(assignmentService.getAssignmentsByCourse(courseId));
     }
 
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasRole('USER')")
     @PostMapping(value = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<AssignmentSubmissionResponse> submitAssignment(
             @Valid @ModelAttribute AssignmentSubmissionRequest request,
             @AuthenticationPrincipal CustomUserPrincipal student) {
-        log.info("📤 Submitting assignment: {} by student: {}", request.getAssignmentId(), student.id());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(assignmentService.submitAssignment(request, student.id()));
     }
@@ -89,7 +85,6 @@ public class AssignmentController {
             @PathVariable Long submissionId,
             @Valid @RequestBody AssignmentGradeRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📝 Grading submission: {} by teacher: {}", submissionId, teacher.id());
         return ResponseEntity.ok(assignmentService.gradeSubmission(
                 assignmentId, submissionId, request, teacher.id()));
     }
@@ -99,15 +94,61 @@ public class AssignmentController {
     public ResponseEntity<List<AssignmentSubmissionResponse>> getSubmissions(
             @PathVariable Long assignmentId,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📊 Getting submissions for assignment: {}", assignmentId);
         return ResponseEntity.ok(assignmentService.getSubmissionsByAssignment(assignmentId, teacher.id()));
     }
 
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasRole('USER')")
     @GetMapping("/my-submissions")
     public ResponseEntity<List<AssignmentSubmissionResponse>> getMySubmissions(
             @AuthenticationPrincipal CustomUserPrincipal student) {
-        log.info("📋 Getting submissions for student: {}", student.id());
         return ResponseEntity.ok(assignmentService.getMySubmissions(student.id()));
+    }
+    @PreAuthorize("hasRole('TEACHER') or hasRole('ADMIN') or hasRole('STUDENT')")
+    @GetMapping("/submissions/{submissionId}/view")
+    public ResponseEntity<InputStreamResource> viewSubmissionFile(
+            @PathVariable Long submissionId,
+            @AuthenticationPrincipal CustomUserPrincipal user) {
+
+        log.info("👁️ Viewing submission file: submissionId={}, userId={}", submissionId, user.id());
+
+        try {
+            InputStream inputStream = assignmentService.downloadSubmissionFile(submissionId, user.id());
+            String fileName = assignmentService.getSubmissionFileName(submissionId);
+            String contentType = assignmentService.getSubmissionContentType(submissionId);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "inline; filename=\"" + fileName + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(new InputStreamResource(inputStream));
+
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        } catch (UnauthorizedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    // ─── STUDENT UPDATE THEIR OWN SUBMISSION ───
+    @PreAuthorize("hasRole('STUDENT')")
+    @PatchMapping(value = "/submissions/{submissionId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AssignmentSubmissionResponse> updateSubmission(
+            @PathVariable Long submissionId,
+            @Valid @ModelAttribute AssignmentSubmissionUpdateRequest request,
+            @AuthenticationPrincipal CustomUserPrincipal student) {
+
+
+        return ResponseEntity.ok(assignmentService.updateSubmission(submissionId, request, student.id()));
+    }
+
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/submissions/{submissionId}/edit")
+    public ResponseEntity<AssignmentSubmissionResponse> getSubmissionForEdit(
+            @PathVariable Long submissionId,
+            @AuthenticationPrincipal CustomUserPrincipal student) {
+
+
+        return ResponseEntity.ok(assignmentService.getSubmissionForEdit(submissionId, student.id()));
     }
 }

@@ -1,24 +1,26 @@
 package com.example.mscontent.config;
 
 import io.minio.MinioClient;
-import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 @Configuration
-@ConfigurationProperties(prefix = "minio")
-@Data
 public class MinioConfig {
+
+    @Value("${minio.url}")
     private String url;
-    private String publicUrl;
+
+    @Value("${minio.access-key}")
     private String accessKey;
+
+    @Value("${minio.secret-key}")
     private String secretKey;
-    private String bucketName;
 
     @Bean
     public MinioClient minioClient() {
         return MinioClient.builder()
-                .endpoint(url) // Daxili URL (minio:9000)
+                .endpoint(url)
                 .credentials(accessKey, secretKey)
                 .build();
     }

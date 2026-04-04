@@ -2,10 +2,7 @@ package com.example.msassignment.service;
 
 import com.example.msassignment.client.CourseClient;
 import com.example.msassignment.client.CourseResponse;
-import com.example.msassignment.dto.request.AssignmentGradeRequest;
-import com.example.msassignment.dto.request.AssignmentRequest;
-import com.example.msassignment.dto.request.AssignmentSubmissionRequest;
-import com.example.msassignment.dto.request.AssignmentUpdateRequest;
+import com.example.msassignment.dto.request.*;
 import com.example.msassignment.dto.response.AssignmentResponse;
 import com.example.msassignment.dto.response.AssignmentSubmissionResponse;
 import com.example.msassignment.entity.*;
@@ -22,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -39,6 +37,11 @@ public class AssignmentService {
     private Assignment fetchAssignmentById(Long id) {
         return assignmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + id));
+    }
+
+    private AssignmentSubmission fetchSubmissionById(Long id) {
+        return submissionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found with id: " + id));
     }
 
     // ─── CREATE ───
@@ -95,7 +98,78 @@ public class AssignmentService {
         validateOwnership(assignment, teacherId);
         assignmentRepository.delete(assignment);
     }
+    // ─── UPDATE SUBMISSION (Student can update their own submission) ───
+    @Transactional
+    public AssignmentSubmissionResponse updateSubmission(Long submissionId,
+                                                         AssignmentSubmissionUpdateRequest request,
+                                                         Long studentId) {
+        // Submission-u tap
+        AssignmentSubmission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found with id: " + submissionId));
 
+        // Yalnız öz submission-unu dəyişə bilər
+        if (!submission.getStudentId().equals(studentId)) {
+            throw new UnauthorizedException("You can only update your own submission");
+        }
+
+        // Assignment-ı tap
+        Assignment assignment = assignmentRepository.findById(submission.getAssignmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+
+        // Deadline keçibsə, yeniləməyə icazə vermə
+        if (assignment.getDeadline() != null && LocalDateTime.now().isAfter(assignment.getDeadline())) {
+            throw new UnauthorizedException("Cannot update submission after deadline");
+        }
+
+        // Mətn cavabını yenilə
+        if (request.getTextAnswer() != null) {
+            submission.setTextAnswer(request.getTextAnswer());
+        }
+
+        // Faylı yenilə (əgər yeni fayl gəlibsə)
+        MultipartFile newFile = request.getFile();
+        if (newFile != null && !newFile.isEmpty()) {
+            // Köhnə faylı sil
+            if (submission.getFileName() != null) {
+                try {
+                    minioService.deleteFile(submission.getFileName());
+                } catch (Exception ignored) {
+                }
+            }
+
+            // Yeni faylı yüklə
+            String folder = "assignment-" + submission.getAssignmentId();
+            String newFileName = minioService.uploadFile(newFile, folder);
+
+            submission.setFileName(newFileName);
+            submission.setFileSize(newFile.getSize());
+            submission.setMimeType(newFile.getContentType());
+
+        }
+
+        // Status-u yenilə (yenidən SUBMITTED et)
+        submission.setStatus(SubmissionStatus.SUBMITTED);
+        submission.setUpdatedAt(LocalDateTime.now());
+
+        // Qiyməti sıfırla (çünki yenidən yoxlanmalıdır)
+        submission.setScore(null);
+        submission.setFeedback(null);
+
+        return assignmentMapper.toDto(submissionRepository.save(submission));
+    }
+
+    // ─── GET SUBMISSION BY ID (for edit) ───
+    @Transactional(readOnly = true)
+    public AssignmentSubmissionResponse getSubmissionForEdit(Long submissionId, Long studentId) {
+        AssignmentSubmission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found with id: " + submissionId));
+
+        if (!submission.getStudentId().equals(studentId)) {
+            throw new UnauthorizedException("You can only view your own submission");
+        }
+
+        return assignmentMapper.toDto(submission);
+    }
     // ─── SUBMIT ───
     @Transactional
     public AssignmentSubmissionResponse submitAssignment(AssignmentSubmissionRequest request, Long studentId) {
@@ -142,8 +216,12 @@ public class AssignmentService {
         Assignment assignment = fetchAssignmentById(assignmentId);
         validateOwnership(assignment, teacherId);
 
-        AssignmentSubmission submission = submissionRepository.findById(submissionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Submission not found with id: " + submissionId));
+        AssignmentSubmission submission = fetchSubmissionById(submissionId);
+
+        // Submission-in bu assignment-a aid olduğunu yoxla
+        if (!submission.getAssignmentId().equals(assignmentId)) {
+            throw new UnauthorizedException("Submission does not belong to this assignment");
+        }
 
         submission.setScore(request.getScore());
         submission.setFeedback(request.getFeedback());
@@ -170,6 +248,74 @@ public class AssignmentService {
                 .stream()
                 .map(assignmentMapper::toDto)
                 .toList();
+    }
+
+    // ==================== YENİ METODLAR ====================
+
+    // ─── DOWNLOAD SUBMISSION FILE (View üçün) ───
+    @Transactional(readOnly = true)
+    public InputStream downloadSubmissionFile(Long submissionId, Long userId) {
+        AssignmentSubmission submission = fetchSubmissionById(submissionId);
+        Assignment assignment = fetchAssignmentById(submission.getAssignmentId());
+
+        // Yetkilendirme yoxlaması
+        boolean isTeacher = assignment.getTeacherId().equals(userId);
+        boolean isOwner = submission.getStudentId().equals(userId);
+
+        if (!isTeacher && !isOwner) {
+            throw new UnauthorizedException("You are not authorized to download this file");
+        }
+
+        if (submission.getFileName() == null) {
+            throw new ResourceNotFoundException("No file attached to this submission");
+        }
+
+        return minioService.downloadFile(submission.getFileName());
+    }
+
+    // ─── GET SUBMISSION FILE NAME ───
+    @Transactional(readOnly = true)
+    public String getSubmissionFileName(Long submissionId) {
+        AssignmentSubmission submission = fetchSubmissionById(submissionId);
+        if (submission.getFileName() == null) {
+            return "submission_" + submissionId;
+        }
+        // Original file name-i qaytar (MinIO-dakı yolun son hissəsi)
+        String fileName = submission.getFileName();
+        if (fileName.contains("/")) {
+            fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
+        }
+        return fileName;
+    }
+
+    // ─── GET SUBMISSION CONTENT TYPE ───
+    @Transactional(readOnly = true)
+    public String getSubmissionContentType(Long submissionId) {
+        AssignmentSubmission submission = fetchSubmissionById(submissionId);
+        return submission.getMimeType() != null ? submission.getMimeType() : "application/octet-stream";
+    }
+
+    // ─── CHECK IF SUBMISSION HAS FILE ───
+    @Transactional(readOnly = true)
+    public boolean submissionHasFile(Long submissionId) {
+        AssignmentSubmission submission = fetchSubmissionById(submissionId);
+        return submission.getFileName() != null && !submission.getFileName().isEmpty();
+    }
+
+    // ─── GET SUBMISSION BY ID (with authorization) ───
+    @Transactional(readOnly = true)
+    public AssignmentSubmissionResponse getSubmissionById(Long submissionId, Long userId) {
+        AssignmentSubmission submission = fetchSubmissionById(submissionId);
+        Assignment assignment = fetchAssignmentById(submission.getAssignmentId());
+
+        boolean isTeacher = assignment.getTeacherId().equals(userId);
+        boolean isOwner = submission.getStudentId().equals(userId);
+
+        if (!isTeacher && !isOwner) {
+            throw new UnauthorizedException("You are not authorized to view this submission");
+        }
+
+        return assignmentMapper.toDto(submission);
     }
 
     // ─── HELPERS ───

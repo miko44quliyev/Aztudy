@@ -10,19 +10,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@OpenAPIDefinition(
-        servers = {
-                @Server(url = "/", description = "Gateway")
-        },
-        info = @Info(title = "MS-Course API", version = "v1"),
-        security = @SecurityRequirement(name = "bearerAuth")
-)
-@SecurityScheme(
-        name = "bearerAuth",
-        type = SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT"
-)
 @SpringBootApplication
 @EnableFeignClients
 public class MsCourseApplication {

@@ -25,6 +25,12 @@ spring:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin123}
+    connection-timeout: 5000
 
 jwt:
   secret: ${JWT_SECRET:w7V9s2G8h4L3p9J6qX1vZ0nA5rT8uK2mF0yP3bQ7sD1eR4xV}

@@ -9,19 +9,6 @@ import io.swagger.v3.oas.annotations.servers.Server;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
-@OpenAPIDefinition(
-        servers = {
-                @Server(url = "/", description = "Gateway")
-        },
-        info = @Info(title = "MS-Content API", version = "v1"),
-        security = @SecurityRequirement(name = "bearerAuth")
-)
-@SecurityScheme(
-        name = "bearerAuth",
-        type = SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT"
-)
 @EnableFeignClients
 @SpringBootApplication
 public class MsContentApplication {

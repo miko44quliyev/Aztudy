@@ -27,10 +27,13 @@ public abstract class ContentMapper {
     @Mapping(target = "fileUrl", ignore = true)
     public abstract ContentResponse toDto(Content content);
 
-
     @AfterMapping
     protected void setFileUrl(Content content, @MappingTarget ContentResponse response) {
-        response.setFileUrl(minioService.getPresignedUrl(content.getFileName()));
+        if (content.getFileName() != null) {
+            // 1 saat (3600 saniyə) etibarlı URL
+            String fileUrl = minioService.getPresignedUrl(content.getFileName(), 3600);
+            response.setFileUrl(fileUrl);
+        }
     }
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

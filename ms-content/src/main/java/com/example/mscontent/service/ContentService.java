@@ -2,6 +2,7 @@ package com.example.mscontent.service;
 
 import com.example.mscontent.client.CourseClient;
 import com.example.mscontent.client.CourseResponse;
+import com.example.mscontent.dto.ContentFileInfo;
 import com.example.mscontent.dto.ContentResponse;
 import com.example.mscontent.dto.ContentUpdateRequest;
 import com.example.mscontent.dto.ContentUploadRequest;
@@ -51,18 +52,17 @@ public class ContentService {
         content.setMimeType(file.getContentType());
         content.setContentType(detectContentType(file.getContentType()));
 
+
         return contentMapper.toDto(contentRepository.save(content));
     }
 
     // ─── GET BY ID ───
-    @Cacheable(value = "contents", key = "#id")
     @Transactional(readOnly = true)
     public ContentResponse getContentById(Long id) {
         return contentMapper.toDto(fetchContentById(id));
     }
 
     // ─── GET BY COURSE ───
-    @Cacheable(value = "contents_by_course", key = "#courseId")
     @Transactional(readOnly = true)
     public List<ContentResponse> getContentByCourseId(Long courseId) {
         return contentRepository.findByCourseId(courseId)
@@ -86,6 +86,34 @@ public class ContentService {
     public ContentResponse updateContent(Long id, ContentUpdateRequest request, Long teacherId) {
         Content content = fetchContentById(id);
         validateOwnership(content, teacherId);
+        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+            content.setTitle(request.getTitle());
+        }
+
+        if (request.getDescription() != null) {
+            content.setDescription(request.getDescription());
+        }
+
+        MultipartFile newFile = request.getFile();
+        if (newFile != null && !newFile.isEmpty()) {
+            // Köhnə faylı sil
+            if (content.getFileName() != null) {
+                try {
+                    minioService.deleteFile(content.getFileName());
+                } catch (Exception ignored) {
+                }
+            }
+
+            // Yeni faylı yüklə
+            String folder = "course-" + content.getCourseId();
+            String newFileName = minioService.uploadFile(newFile, folder);
+
+            content.setFileName(newFileName);
+            content.setFileSize(newFile.getSize());
+            content.setMimeType(newFile.getContentType());
+            content.setContentType(detectContentType(newFile.getContentType()));
+
+        }
         contentMapper.updateFromDto(request, content);
         return contentMapper.toDto(contentRepository.save(content));
     }
@@ -126,4 +154,7 @@ public class ContentService {
         if (mimeType.equals("application/pdf")) return ContentType.PDF;
         return ContentType.DOCUMENT;
     }
+
+
+
 }
