@@ -33,7 +33,6 @@ public class AssessmentController {
     public ResponseEntity<AssessmentResponse> createAssessment(
             @Valid @RequestBody AssessmentRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📝 Creating assessment: {} by teacher: {}", request.getTitle(), teacher.id());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(assessmentService.createAssessment(request, teacher.id()));
     }
@@ -53,7 +52,6 @@ public class AssessmentController {
     public ResponseEntity<Void> deleteAssessment(
             @PathVariable Long assessmentId,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("🗑️ Deleting assessment: {} by teacher: {}", assessmentId, teacher.id());
         assessmentService.deleteAssessment(assessmentId, teacher.id());
         return ResponseEntity.noContent().build();
     }
@@ -61,7 +59,6 @@ public class AssessmentController {
     @GetMapping("/{assessmentId}")
     public ResponseEntity<AssessmentResponse> getAssessmentById(
             @PathVariable Long assessmentId) {
-        log.info("📖 Getting assessment: {}", assessmentId);
         return ResponseEntity.ok(assessmentService.getAssessmentById(assessmentId));
     }
 
@@ -69,7 +66,6 @@ public class AssessmentController {
     public ResponseEntity<List<AssessmentResponse>> getAssessmentsByCourse(
             @PathVariable Long courseId,
             @RequestParam(required = false) AssessmentType type) {
-        log.info("📚 Getting assessments for course: {}", courseId);
         List<AssessmentResponse> assessments = type != null
                 ? assessmentService.getAssessmentsByCourseAndType(courseId, type)
                 : assessmentService.getAssessmentsByCourse(courseId);
@@ -81,7 +77,6 @@ public class AssessmentController {
     public ResponseEntity<SubmissionResponse> submitAssessment(
             @Valid @RequestBody SubmissionRequest request,
             @AuthenticationPrincipal CustomUserPrincipal student) {
-        log.info("📤 Submitting assessment: {} by student: {}", request.getAssessmentId(), student.id());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(assessmentService.submitAssessment(request, student.id()));
     }
@@ -91,7 +86,6 @@ public class AssessmentController {
     public ResponseEntity<List<SubmissionResponse>> getSubmissions(
             @PathVariable Long assessmentId,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📊 Getting submissions for assessment: {}", assessmentId);
         return ResponseEntity.ok(assessmentService.getSubmissionsByAssessment(assessmentId, teacher.id()));
     }
 
@@ -99,7 +93,6 @@ public class AssessmentController {
     @GetMapping("/my-submissions")
     public ResponseEntity<List<SubmissionResponse>> getMySubmissions(
             @AuthenticationPrincipal CustomUserPrincipal student) {
-        log.info("📋 Getting submissions for student: {}", student.id());
         return ResponseEntity.ok(assessmentService.getMySubmissions(student.id()));
     }
 
@@ -110,7 +103,6 @@ public class AssessmentController {
             @PathVariable Long submissionId,
             @Valid @RequestBody SubmissionGradeRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📝 Grading submission: {} by teacher: {}", submissionId, teacher.id());
         return ResponseEntity.ok(assessmentService.gradeSubmission(
                 assessmentId, submissionId, request, teacher.id()));
     }

@@ -29,7 +29,6 @@ public class CourseController {
     public ResponseEntity<CourseResponse> createCourse(
             @Valid @RequestBody CourseRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("📝 Creating course: {} by teacher: {}", request.getTitle(), teacher.id());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(courseService.createCourse(request, teacher.id()));
     }
@@ -40,7 +39,6 @@ public class CourseController {
             @PathVariable Long courseId,
             @Valid @RequestBody CourseUpdateRequest request,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("✏️ Updating course: {} by teacher: {}", courseId, teacher.id());
         return ResponseEntity.ok(courseService.updateCourse(courseId, request, teacher.id()));
     }
 
@@ -49,14 +47,12 @@ public class CourseController {
     public ResponseEntity<Void> deleteCourse(
             @PathVariable Long courseId,
             @AuthenticationPrincipal CustomUserPrincipal teacher) {
-        log.info("🗑️ Deleting course: {} by teacher: {}", courseId, teacher.id());
         courseService.deleteCourse(courseId, teacher.id());
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{courseId}")
     public ResponseEntity<CourseResponse> getCourseById(@PathVariable Long courseId) {
-        log.info("📖 Getting course: {}", courseId);
         return ResponseEntity.ok(courseService.getCourseById(courseId));
     }
 
