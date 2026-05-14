@@ -144,7 +144,7 @@ public class AssignmentController {
 
     @PreAuthorize("hasRole('STUDENT')")
     @GetMapping("/submissions/{submissionId}/edit")
-    public ResponseEntity<AssignmentSubmissionResponse> getSubmissionForEdit(
+    public ResponseEntity<AssignmhentSubmissionResponse> getSubmissionForEdit(
             @PathVariable Long submissionId,
             @AuthenticationPrincipal CustomUserPrincipal student) {
 
